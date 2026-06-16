@@ -16,3 +16,29 @@ checkpoints_phase2/
 
 # OS generated files
 .DS_Store
+Thumbs.db
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+*.lof
+*.lot
+*.nav
+*.snm
+
+# Python
+*.pyc
+*.pyo
+
+# Environment
+.virtual_documents/
+*.egg-info/

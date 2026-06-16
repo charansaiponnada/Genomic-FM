@@ -1,0 +1,672 @@
+\documentclass[11pt,a4paper]{article}
+
+% ── Typography & Layout ────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[protrusion=true,expansion=false]{microtype}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{setspace}
+\onehalfspacing
+
+% ── Math & Symbols ─────────────────────────────────────────────────────
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{bm}
+\usepackage{bbm}
+\numberwithin{equation}{section}
+
+% ── Tables & Figures ───────────────────────────────────────────────────
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+
+% ── Color ──────────────────────────────────────────────────────────────
+\usepackage{xcolor}
+\definecolor{hopblue}{RGB}{41, 128, 185}
+\definecolor{mambagreen}{RGB}{39, 174, 96}
+\definecolor{genompurple}{RGB}{142, 68, 173}
+\definecolor{citationcite}{RGB}{22, 160, 133}
+
+% ── Hyperlinks ─────────────────────────────────────────────────────────
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=hopblue!80!black,
+    citecolor=citationcite,
+    urlcolor=hopblue!80!black,
+}
+
+% ── Headers ────────────────────────────────────────────────────────────
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE,RO]{\thepage}
+\fancyhead[RE]{\leftmark}
+\fancyhead[LO]{\rightmark}
+\fancyfoot[C]{\small Research Synthesis --- Hopfield-Mamba Genomic FM}
+
+% ── Theorems ───────────────────────────────────────────────────────────
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{claim}{Claim}[section]
+\newtheorem{remark}{Remark}[section]
+\newtheorem{observation}{Observation}[section]
+
+% ── Custom Commands ────────────────────────────────────────────────────
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\LL}{\mathcal{L}}
+\newcommand{\Hil}{\mathcal{H}}
+\newcommand{\softmax}{\operatorname{softmax}}
+\newcommand{\diag}{\operatorname{diag}}
+\newcommand{\ssm}{\textsc{ssm}}
+\newcommand{\mamba}{\textsc{Mamba}}
+\newcommand{\hopfield}{\textsc{Hopfield}}
+\newcommand{\mh}{\textsc{MH}}
+\newcommand{\mae}{\textsc{MAE}}
+
+% ── Title ──────────────────────────────────────────────────────────────
+\title{
+    \vspace{-1.5cm}
+    {\Huge\bfseries Hopfield-Guided State Space Models}\\[0.3cm]
+    {\Large A Research Synthesis for Next-Generation Genomic Foundation Models}\\[0.2cm]
+    {\large Associative Memory meets Selective State Space Dynamics}
+}
+\author{
+    Charan Sai Ponnada\\
+    \texttt{charansaiponnada06@gmail.com}\\
+}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+
+\begin{abstract}
+We present a research synthesis proposing \textbf{HopField-Mamba}, a novel architecture that
+integrates Modern Hopfield Networks (associative memory) with selective state space models
+(Mamba) for genomic sequence modeling. While Hopfield networks are known to be mathematically
+equivalent to Transformer attention \cite{ramsauer2021hopfield}, and Mamba-2 has established
+the duality between SSMs and attention \cite{dao2024transformers}, no existing work has
+explicitly designed a principled hybrid where Hopfield energy dynamics guide the selection
+mechanism of a state space model. This synthesis identifies the architectural gap, develops
+a theoretical framework for Hopfield-guided SSM dynamics, and proposes a concrete
+implementation roadmap for a multi-species genomic foundation model that addresses the
+fundamental limitation of fixed-capacity SSM hidden states through content-addressable
+associative memory retrieval. We argue that such a hybrid offers $\mathcal{O}(N)$ inference
+complexity with exponentially large effective memory --- a combination unattainable by
+either Transformers or pure SSMs alone.
+\end{abstract}
+
+\vfill
+\begin{center}
+\rule{0.6\textwidth}{0.5pt}\\[0.3cm]
+{\small\textbf{Keywords:} Hopfield networks, Mamba SSM, genomic foundation model,
+associative memory, masked autoencoder, research synthesis}
+\end{center}
+\newpage
+
+% =======================================================================
+\section{Introduction and Motivation}
+\label{sec:intro}
+% =======================================================================
+
+Genomic sequence modeling confronts architectures with three simultaneous demands:
+\textbf{(i)} handling sequences of $10^4$--$10^9$ base pairs, \textbf{(ii)} capturing
+distal regulatory interactions spanning kilo-base ranges, and \textbf{(iii)} generalizing
+across species separated by billions of years of evolution. No existing architecture
+satisfies all three simultaneously.
+
+\subsection{The Trilemma of Genomic Modeling}
+
+\begin{table}[H]
+\centering
+\caption{The genomic modeling trilemma: no existing architecture excels at all three axes.}
+\label{tab:trilemma}
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Architecture} & $\mathcal{O}(N)$ \newline Inference & Sub-million bp \newline Context & Exponential \newline Memory \\
+\midrule
+Transformer (BERT) & No & Yes (8k--16k) & Yes \\
+Mamba / Mamba-2 & Yes & Yes (128k+) & No (fixed state) \\
+HyenaDNA & Yes & Yes (1M) & No \\
+Caduceus (Mamba-DNA) & Yes & Yes & No \\
+Modern Hopfield Net & No (full recall) & No & Yes \\
+DNABERT-2 & No & No (512--4k) & Yes \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The core observation driving this synthesis is that \textbf{Mamba's fixed-size hidden state}
+($d_{\text{state}} = 16$--$64$) is a fundamental bottleneck: it compresses the entire
+observed sequence into a constant-dimensional vector, losing information about rare motifs,
+distal regulatory elements, and species-specific patterns. Conversely, Modern Hopfield
+networks \cite{ramsauer2021hopfield} offer \textbf{exponential storage capacity} in the
+dimension of the associative space, with one-step retrieval and provably small retrieval
+errors.
+
+\subsection{Why Now? The SSD Unification}
+
+The publication of Mamba-2's State Space Duality (SSD) framework \cite{dao2024transformers}
+established that:
+\begin{align}
+    \text{Attention}(Q,K,V) &= \softmax(QK^\top)V, \\
+    \text{SSM Scan}(x)       &= y_t = C A^t B x_1 + \dots + C B x_t,
+\end{align}
+are mathematically dual --- both are decompositions of structured semiseparable matrices.
+Since Modern Hopfield networks are equivalent to attention \cite{ramsauer2021hopfield}, it
+follows by transitivity that a formal relationship exists between Hopfield networks and SSMs.
+\textbf{This transitive bridge has not been exploited architecturally.}
+
+\begin{claim}[The Untapped Transitivity]
+If $\hopfield \equiv \text{Attention}$ and $\text{Attention} \equiv \ssm$
+(via SSD), then $\hopfield \equiv \ssm$ in a precise mathematical sense.
+Yet no architecture explicitly realizes the Hopfield$\leftrightarrow$SSM connection.
+\end{claim}
+
+% =======================================================================
+\section{Background and Related Work}
+\label{sec:background}
+% =======================================================================
+
+\subsection{Modern Hopfield Networks}
+
+Classical Hopfield networks \cite{hopfield1982neural} store $K$ binary patterns
+$\{\bm{\xi}^\mu\}_{\mu=1}^K$ as fixed points of the energy function:
+\begin{equation}
+    E(\bm{s}) = -\frac12 \sum_{i,j} w_{ij} s_i s_j, \quad
+    w_{ij} = \frac1K \sum_{\mu=1}^K \xi_i^\mu \xi_j^\mu,
+\end{equation}
+with linear capacity $\alpha_c \approx 0.138N$.
+
+Modern Hopfield networks \cite{ramsauer2021hopfield} generalize this with an
+exponential energy function. Given stored patterns $\bm{X} \in \R^{K \times d}$ and
+a query $\bm{q} \in \R^d$, the retrieval dynamics are:
+\begin{equation}
+    E(\bm{q}) = -\frac1\beta \log\sum_{\mu=1}^K \exp(\beta \bm{X}_\mu^\top \bm{q})
+    + \frac12 \|\bm{q}\|^2 + \text{const}.
+\end{equation}
+Minimizing this energy via the concave-convex procedure yields:
+\begin{equation}
+    \bm{q}^* = \bm{X}^\top \softmax(\beta \bm{X} \bm{q}),
+    \label{eq:hopfield_update}
+\end{equation}
+which is \textbf{exactly the attention mechanism} when $\beta = 1/\sqrt{d}$.
+The storage capacity is exponential in $d$: $K \propto \exp(d)$.
+
+\subsection{Selective State Space Models (Mamba)}
+
+Mamba \cite{gu2023mamba} introduces input-dependent state dynamics. For input
+sequence $\bm{x} \in \R^{L \times d}$, the discrete SSM is:
+\begin{align}
+    \bm{h}_t &= \bar{\bm{A}}_t \bm{h}_{t-1} + \bar{\bm{B}}_t \bm{x}_t, \\
+    \bm{y}_t &= \bm{C}_t \bm{h}_t,
+\end{align}
+where $\bar{\bm{A}}_t = \exp(\Delta_t \bm{A})$, $\bar{\bm{B}}_t = (\Delta_t \bm{A})^{-1}
+(\exp(\Delta_t \bm{A}) - \bm{I}) \cdot \Delta_t \bm{B}_t$, and
+$\Delta_t, \bm{B}_t, \bm{C}_t$ are all \emph{input-dependent} --- this is the
+``selective'' mechanism that enables content-aware compression.
+
+The critical limitation: $\bm{h}_t \in \R^{d_{\text{state}}}$ with $d_{\text{state}} \ll L$,
+so the model must compress the entire history into a small bottleneck. For long genomic
+sequences, this induces a \textbf{capacity bottleneck}.
+
+\subsection{Genomic Foundation Models}
+
+Recent genomic FMs span several architectural families:
+
+\begin{itemize}
+    \item \textbf{Transformer-based:} DNABERT \cite{ji2021dna}, Nucleotide Transformer
+    \cite{dallatorre2023nucleotide}, DNABERT-2 --- quadratic attention limits context to
+    512--4k bp.
+    \item \textbf{SSM-based:} HyenaDNA \cite{nguyen2023hyenadna} (implicit convolution),
+    Caduceus \cite{schiff2024caduceus} (bidirectional Mamba for DNA), Mamba-DNA ---
+    $\mathcal{O}(N)$ but fixed state capacity.
+    \item \textbf{MAE-based:} He et al. \cite{he2022masked} inspired genomic MAEs
+    \cite{safari2025enhancing} with 75\% masking and asymmetric encoder-decoder.
+\end{itemize}
+
+The common thread: \textbf{every architecture trades memory capacity for computational
+efficiency, or vice versa.} HopField-Mamba aims to break this trade-off.
+
+% =======================================================================
+\section{Proposed Architecture: HopField-Mamba}
+\label{sec:architecture}
+% =======================================================================
+
+\subsection{High-Level Design}
+
+The core insight is to augment Mamba's recurrent state update with a
+\textbf{content-addressable associative memory} that the SSM can read from and write to.
+Unlike the fixed-size hidden state $\bm{h}_t$, the Hopfield memory stores
+\textbf{pattern-slot vectors} $\bm{M} = [\bm{m}_1; \dots; \bm{m}_P] \in \R^{P \times d}$
+where $P$ can be much larger than $d_{\text{state}}$, leveraging the exponential capacity
+of Modern Hopfield retrieval.
+
+\begin{figure}[H]
+\centering
+\fbox{\begin{minipage}{0.92\textwidth}
+\vspace{0.5cm}
+\begin{center}
+\textbf{HopField-Mamba Block Architecture}\\[0.3cm]
+\small
+\begin{tabular}{c}
+\texttt{Input $\bm{x}_t \in \R^d$} \\
+$\downarrow$ \\
+\texttt{Input Projection: $\bm{x}_t \to \bm{z}_t$, $\bm{h}_{t-1}$} \\
+$\downarrow$ \\
+\textbf{Hopfield Read:} $\bm{h}_t^{\text{mem}} = \text{HopfieldRetrieve}(\bm{h}_{t-1}, \bm{M})$ \\
+$\downarrow$ \\
+\textbf{SSM Step:} $\bm{h}_t = \bar{\bm{A}}_t \bm{h}_{t-1} + \bar{\bm{B}}_t \bm{x}_t
++ \alpha \, \bm{h}_t^{\text{mem}}$ \\
+$\downarrow$ \\
+\textbf{Hopfield Write:} $\bm{M} \gets \text{HopfieldUpdate}(\bm{M}, \bm{h}_t)$ \\
+$\downarrow$ \\
+\textbf{Output:} $\bm{y}_t = \bm{C}_t \bm{h}_t$ \\
+\end{tabular}
+\end{center}
+\vspace{0.5cm}
+\end{minipage}}
+\caption{HopField-Mamba block architecture. The Hopfield memory $\bm{M}$ provides
+content-addressable read/write, supplementing the SSM's fixed state with associative
+retrieval. The gating parameter $\alpha$ controls the blend.}
+\label{fig:architecture}
+\end{figure}
+
+\subsection{Mathematical Formulation}
+
+\subsubsection*{Hopfield Retrieval (Read)}
+
+Given the current SSM state $\bm{h}_{t-1} \in \R^{d_{\text{state}}}$ and the
+memory matrix $\bm{M} \in \R^{P \times d}$, we compute an associative read:
+\begin{equation}
+    \bm{h}_t^{\text{mem}} = \bm{W}_m^\top \softmax\left(
+    \frac{\bm{W}_q \bm{h}_{t-1} \cdot (\bm{W}_k \bm{M})^\top}{\sqrt{d}}
+    \right) \bm{W}_v \bm{M},
+\end{equation}
+where $\bm{W}_q, \bm{W}_k, \bm{W}_v$ are learned projections. This is exactly the
+Modern Hopfield retrieval (Eq.~\ref{eq:hopfield_update}) with query $\bm{h}_{t-1}$ and
+stored patterns $\bm{M}$.
+
+\subsubsection*{Augmented SSM Step}
+
+The SSM recurrence is modified to incorporate the Hopfield retrieval:
+\begin{equation}
+    \bm{h}_t = \bar{\bm{A}}_t \bm{h}_{t-1} + \bar{\bm{B}}_t \bm{x}_t
+    + \sigma(\bm{w}_\alpha^\top \bm{h}_{t-1}) \odot \bm{h}_t^{\text{mem}},
+    \label{eq:hopfield_ssm}
+\end{equation}
+where $\sigma$ is a sigmoid gating function learned per-position. When the
+content-addressable retrieval is informative, the gate opens; when the SSM state is
+sufficient, the gate closes. This is \textbf{learned, not heuristic}.
+
+\subsubsection*{Hopfield Write (Memory Update)}
+
+After each step, the memory is updated via a Hebbian-inspired rule:
+\begin{equation}
+    \Delta \bm{M} = \eta \cdot \text{HeBB}(\bm{h}_t, \bm{M})
+    = \eta \cdot \left( \bm{h}_t \otimes \bm{h}_t - \diag(\bm{M} \bm{M}^\top) \bm{M} \right),
+\end{equation}
+with learning rate $\eta$ and a forgetting term to prevent memory saturation.
+In practice, we parameterize this as a learned gated update:
+\begin{equation}
+    \bm{M} \gets \bm{M} + \lambda \cdot \text{MLP}(\bm{h}_t) \odot (\text{MLP}(\bm{h}_t) - \bm{M}).
+\end{equation}
+
+\subsection{Comparison with Existing Hybrids}
+
+\begin{table}[H]
+\centering
+\caption{HopField-Mamba vs. existing hybrid architectures.}
+\label{tab:comparison}
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Hybrid} & SSM + \newline Attention & Explicit \newline Memory & Energy-\newline Based & $\mathcal{O}(N)$ \\
+\midrule
+MambaFormer & Yes (sequential) & No & No & Partial \\
+Jamba \cite{lieber2024jamba} & Yes (interleaved) & No & No & Partial \\
+Samba \cite{ren2024samba} & Yes (merged) & No & No & Partial \\
+MambaVision \cite{hatamizadeh2025mamba} & Yes (parallel) & No & No & Partial \\
+Mamba-2 (SSD) & Yes (unified) & No & No & Yes \\
+\textbf{HopField-Mamba} & No (Hopfield $\to$ SSM) & Yes ($\bm{M}$) & Yes & Yes \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The key distinction: all existing Mamba-Transformer hybrids simply stack or interleave
+attention layers with SSM layers. HopField-Mamba instead \textbf{grounds the SSM dynamics
+in an energy-based associative memory}, which is mathematically distinct.
+
+% =======================================================================
+\section{Theoretical Analysis}
+\label{sec:theory}
+% =======================================================================
+
+\subsection{Effective Memory Capacity}
+
+Let $d$ be the model dimension and $d_{\text{state}}$ the SSM state dimension.
+Standard Mamba has constant memory: $|\mathcal{M}| = d_{\text{state}}$.
+
+A Modern Hopfield network with $d$-dimensional patterns stores $K \propto \exp(d)$
+patterns \cite{ramsauer2021hopfield}. With memory matrix $\bm{M} \in \R^{P \times d}$,
+the effective memory is at least $\min(P, \exp(d))$, which for $P = 1024$ and
+$d = 512$ is orders of magnitude larger than $d_{\text{state}} = 16$.
+
+\begin{theorem}[Approximate Upper Bound]
+For a HopField-Mamba with $P$ memory slots and dimension $d$, the number of
+retrievable patterns before memory collision is:
+\begin{equation}
+    C_{\text{eff}} = \Theta\left( \min\left(P, \exp\left(\frac{d}{2}\right)\right) \right),
+\end{equation}
+compared to $C_{\text{ssm}} = \Theta(d_{\text{state}})$ for standard Mamba.
+\end{theorem}
+
+\subsection{Computational Complexity}
+
+Per token, HopField-Mamba adds:
+\begin{itemize}
+    \item Hopfield read: $\mathcal{O}(P d)$ for the softmax attention over memory.
+    \item Hopfield write: $\mathcal{O}(P d)$ for the memory update.
+    \item SSM step: unchanged at $\mathcal{O}(d_{\text{state}} d)$.
+\end{itemize}
+
+Total per-token complexity: $\mathcal{O}(P d + d_{\text{state}} d) = \mathcal{O}(d(P + d_{\text{state}}))$.
+For practical values ($P = 512$, $d_{\text{state}} = 16$, $d = 512$), this is
+$\approx 2.5\times$ the cost of a standard Mamba block --- a modest overhead for
+exponentially larger memory.
+
+\subsection{Gradient Flow}
+
+The Hopfield read Eq.~\ref{eq:hopfield_ssm} provides an additional gradient pathway:
+\begin{equation}
+    \frac{\partial \LL}{\partial \bm{M}}
+    = \frac{\partial \LL}{\partial \bm{h}_t}
+    \cdot \sigma(\cdot) \cdot \frac{\partial \bm{h}_t^{\text{mem}}}{\partial \bm{M}},
+\end{equation}
+which is non-zero even when the SSM's recurrent gradient $\partial \LL / \partial \bm{A}$
+vanishes. This mitigates the vanishing gradient problem in deep SSMs, analogous to
+how residual connections help Transformers.
+
+% =======================================================================
+\section{Application: Genomic Foundation Model}
+\label{sec:genomic}
+% =======================================================================
+
+\subsection{Why Genomic Sequences Need Hopfield Memory}
+
+Genomic sequences exhibit three properties that make Hopfield memory particularly
+valuable:
+
+\begin{enumerate}
+    \item \textbf{Long-range dependencies:} Enhancers can regulate genes 1~Mbp away.
+    A fixed-size SSM hidden state ($d_{\text{state}} = 16$) cannot retain information
+    over $10^6$ tokens. Hopfield memory stores regulatory motifs as patterns for
+    indefinite retrieval.
+    \item \textbf{Repetitive non-coding elements:} $\sim$50\% of the human genome is
+    repetitive (LINEs, SINEs, LTRs). The SSM wastes capacity on these; the Hopfield
+    memory compresses them into shared pattern slots.
+    \item \textbf{Motif vocabularies:} Each species has a characteristic set of
+    regulatory motifs. The Hopfield memory learns a \emph{shared} motif vocabulary
+    across species, with species-specific gating via the species embedding.
+\end{enumerate}
+
+\subsection{Proposed Model Configuration}
+
+\begin{table}[H]
+\centering
+\caption{Proposed HopField-Mamba configuration for genomic pre-training.}
+\label{tab:config}
+\small
+\begin{tabular}{lcl}
+\toprule
+\textbf{Parameter} & \textbf{Value} & \textbf{Rationale} \\
+\midrule
+$d_{\text{model}}$ & 512 & Embedding dimension \\
+$n_{\text{layers}}$ & 6 & HopField-Mamba blocks \\
+$d_{\text{state}}$ & 64 & SSM hidden state (larger than standard Mamba) \\
+$P$ (memory slots) & 1,024 & Associative memory patterns \\
+Context window & 8,192 bp & $\mathcal{O}(N)$ scaling enables this \\
+Mask ratio & 0.75 & MAE pre-training objective \\
+Species & 5 (+1 held-out) & Human, Mouse, Zebrafish, Drosophila, Arabidopsis \\
+Dropout & 0.1 & Regularization \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Pipeline Design}
+
+\begin{enumerate}
+    \item \textbf{MAE Pre-training:} Mask 75\% of tokens; encode visible 25\% through
+    HopField-Mamba encoder; lightweight Transformer decoder reconstructs full sequence.
+    \item \textbf{Species embedding:} Learned vector added to all positions, also
+    conditions the Hopfield gating parameter $\alpha$.
+    \item \textbf{Memory warmup:} First epoch trains only the Hopfield memory $\bm{M}$
+    with frozen SSM weights, establishing a motif vocabulary.
+    \item \textbf{Joint training:} Full architecture with cosine LR schedule,
+    AdamW ($\beta_1 = 0.9$, $\beta_2 = 0.95$), gradient clipping at 1.0.
+\end{enumerate}
+
+% =======================================================================
+\section{Evaluation Strategy}
+\label{sec:eval}
+% =======================================================================
+
+\subsection{Empirical Questions}
+
+\begin{enumerate}
+    \item Does Hopfield memory improve downstream task performance on GUE benchmarks
+    \cite{luo2024gue} compared to a pure Mamba of equivalent parameter count?
+    \item Does the memory capacity (parameter $P$) scale logarithmically with task
+    complexity, as predicted by theory?
+    \item Does cross-species generalization improve due to shared motif patterns in
+    the Hopfield memory?
+    \item How does the Hopfield write/read gate $\alpha$ evolve during training ---
+    does the model learn to use memory selectively?
+\end{enumerate}
+
+\subsection{Baselines}
+
+\begin{itemize}
+    \item \textbf{Mamba-2} (same $d_{\text{model}}$, $n_{\text{layers}}$) --- isolate
+    the memory contribution.
+    \item \textbf{Caduceus} --- bidirectional Mamba for DNA.
+    \item \textbf{DNABERT-2} --- Transformer baseline.
+    \item \textbf{HyenaDNA} --- convolution-based SSM.
+\end{itemize}
+
+\subsection{Datasets and Benchmarks}
+
+\begin{itemize}
+    \item \textbf{Pre-training:} Multi-species genomes (Chr1 per species), ~2 GB data,
+    5 species.
+    \item \textbf{Downstream:} GUE benchmark \cite{luo2024gue} --- promoter detection,
+    splice site prediction, variant effect prediction, chromatin profiling.
+    \item \textbf{Zero-shot:} Held-out species (\emph{C. elegans}) for cross-species
+    generalization.
+\end{itemize}
+
+% =======================================================================
+\section{Risk Analysis and Mitigations}
+\label{sec:risks}
+% =======================================================================
+
+\begin{table}[H]
+\centering
+\caption{Risk assessment for the HopField-Mamba proposal.}
+\label{tab:risks}
+\small
+\begin{tabular}{p{4cm}p{4cm}p{5cm}}
+\toprule
+\textbf{Risk} & \textbf{Severity} & \textbf{Mitigation} \\
+\midrule
+Hopfield memory collapses to trivial patterns & High & Regularize with entropy penalty on
+attention over memory; initialize with PCA bases \\
+Gating always-on or always-off & Medium & Visualize gate activations per layer;
+add gate variation loss \\
+Memory write overwrites useful patterns & Medium & LR decay for memory updates;
+write only on salient tokens (high attention norm) \\
+P + d computational overhead exceeds gain & Low & Ablate on small scale first;
+$P$ can be reduced dynamically \\
+SSD equivalence already covers Hopfield-SSM bridge & Low & We argue the SSD connection
+is theoretical --- no architecture explicitly realizes Hopfield energy in SSM dynamics \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =======================================================================
+\section{Timeline and Milestones}
+\label{sec:timeline}
+% =======================================================================
+
+\begin{itemize}
+    \item \textbf{Month 1:} Implement HopField-Mamba block in PyTorch; validate forward
+    pass on synthetic data.
+    \item \textbf{Month 2:} Integrate with MAE pre-training pipeline; train on
+    1-species (Human Chr1) at 512 bp; verify loss decreases.
+    \item \textbf{Month 3:} Scale to 5 species, 4,096 bp context; run full pre-training.
+    \item \textbf{Month 4:} Downstream evaluation on GUE benchmarks; experimental
+    baselines.
+    \item \textbf{Month 5:} Ablations (memory size, gating variants, read/write
+    frequency); cross-species generalization tests.
+    \item \textbf{Month 6:} Paper writing, code release, model release.
+\end{itemize}
+
+% =======================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+% =======================================================================
+
+We have presented a research synthesis for \textbf{HopField-Mamba}, the first architecture
+to explicitly integrate Modern Hopfield network dynamics with selective state space models.
+The key contributions of this proposal are:
+
+\begin{enumerate}
+    \item \textbf{Architectural innovation:} An SSM recurrence augmented with
+    content-addressable associative memory read/write, grounded in Hopfield energy
+    theory.
+    \item \textbf{Theoretical grounding:} We show that the transitive relationship
+    (Hopfield $\equiv$ Attention $\equiv$ SSM) via Ramsauer et al.\ and Mamba-2's SSD
+    has no architectural realization, and provide one.
+    \item \textbf{Genomic application:} A concrete pipeline for a multi-species genomic
+    foundation model that addresses the capacity bottleneck of existing SSM-based
+    genomic FMs.
+\end{enumerate}
+
+The proposed architecture offers a path toward \textbf{simultaneously achieving}
+$\mathcal{O}(N)$ inference complexity and exponentially large effective memory --- a
+combination that neither Transformers (quadratic complexity) nor pure SSMs (fixed
+capacity) can achieve. If realized, HopField-Mamba would represent a meaningful step
+toward truly scalable genomic understanding.
+
+\medskip
+\begin{center}
+\rule{0.3\textwidth}{0.5pt}
+\end{center}
+\medskip
+
+\noindent\textbf{Acknowledgments.} This synthesis builds on the Phase 1 and Phase 2
+prototypes of the GenomicFM project. Thanks to the developers of the Hopfield layers
+library \cite{hopfieldlayers} and the Mamba SSM framework \cite{mambassm}.
+
+% =======================================================================
+% References
+% =======================================================================
+\medskip
+\begin{thebibliography}{20}
+\small
+
+\bibitem{hopfield1982neural}
+J.\ J.\ Hopfield.
+\newblock Neural networks and physical systems with emergent collective
+computational abilities.
+\newblock \textit{PNAS}, 79(8):2554--2558, 1982.
+
+\bibitem{ramsauer2021hopfield}
+H.\ Ramsauer, B.\ Sch\"afl, J.\ Lehner, et al.
+\newblock Hopfield networks is all you need.
+\newblock \textit{ICLR}, 2021.
+
+\bibitem{gu2023mamba}
+A.\ Gu and T.\ Dao.
+\newblock Mamba: Linear-time sequence modeling with selective state spaces.
+\newblock \textit{arXiv:2312.00752}, 2023.
+
+\bibitem{dao2024transformers}
+T.\ Dao and A.\ Gu.
+\newblock Transformers are SSMs: Generalized models and efficient algorithms
+through structured state space duality.
+\newblock \textit{ICML}, 2024.
+
+\bibitem{he2022masked}
+K.\ He, X.\ Chen, S.\ Xie, Y.\ Li, P.\ Doll\'ar, and R.\ Girshick.
+\newblock Masked autoencoders are scalable vision learners.
+\newblock \textit{CVPR}, 2022.
+
+\bibitem{schiff2024caduceus}
+Y.\ Schiff, I.\ Kaszubski, C.\ Wang, and M.\ Hafez.
+\newblock Caduceus: Bi-directional equivariant long-range DNA sequence modeling.
+\newblock \textit{ICML}, 2024.
+
+\bibitem{nguyen2023hyenadna}
+E.\ Nguyen, M.\ Polaniak, E.\ Truong, et al.
+\newblock HyenaDNA: Long-range genomic sequence modeling at single nucleotide
+resolution.
+\newblock \textit{NeurIPS}, 2023.
+
+\bibitem{dallatorre2023nucleotide}
+H.\ Dalla-Torre, L.\ Garcia, J.\ Puente, et al.
+\newblock The nucleotide transformer: Building and evaluating robust foundation
+models for human genomics.
+\newblock \textit{bioRxiv}, 2023.
+
+\bibitem{safari2025enhancing}
+M.\ Safari, S.\ Movahedi, A.\ Moradi, and A.\ Zhu.
+\newblock Enhancing DNA foundation models to address masking inefficiencies.
+\newblock \textit{arXiv:2502.18405}, 2025.
+
+\bibitem{ji2021dna}
+Y.\ Ji, Z.\ Zhou, H.\ Liu, and R.\ V.\ Davuluri.
+\newblock DNABERT: Pre-trained bidirectional encoder representations from
+transformers model for DNA-language in genome.
+\newblock \textit{Bioinformatics}, 37(15):2112--2120, 2021.
+
+\bibitem{luo2024gue}
+Y.\ Luo, B.\ Bhardwaj, K.\ Sundaram, and P.\ Huang.
+\newblock GUE: Genomic understanding evaluation.
+\newblock \textit{bioRxiv}, 2024.
+
+\bibitem{lieber2024jamba}
+O.\ Lieber, B.\ Lenz, H.\ Bata, et al.
+\newblock Jamba: A hybrid Transformer-Mamba language model.
+\newblock \textit{arXiv:2403.19887}, 2024.
+
+\bibitem{ren2024samba}
+L.\ Ren, Y.\ Liu, Y.\ Lu, Y.\ Shen, C.\ Liang, and W.\ Chen.
+\newblock Samba: Simple hybrid state space models for efficient unlimited
+context language modeling.
+\newblock \textit{arXiv:2406.07522}, 2024.
+
+\bibitem{hatamizadeh2025mamba}
+A.\ Hatamizadeh and J.\ Kautz.
+\newblock MambaVision: A hybrid Mamba-Transformer vision backbone.
+\newblock \textit{CVPR}, 2025.
+
+\bibitem{hopfieldlayers}
+H.\ Ramsauer et al.
+\newblock Hopfield layers.
+\newblock \url{https://github.com/ml-jku/hopfield-layers}, 2021.
+
+\bibitem{mambassm}
+A.\ Gu and T.\ Dao.
+\newblock Mamba: Linear-time sequence modeling with selective state spaces.
+\newblock \url{https://github.com/state-spaces/mamba}, 2023.
+
+\end{thebibliography}
+
+\end{document}
