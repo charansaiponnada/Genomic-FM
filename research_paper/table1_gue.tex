@@ -1,0 +1,20 @@
+
+\begin{table}[t]
+\centering
+\caption{GUE benchmark AUROC. Baselines use full fine-tuning; our models use frozen-encoder linear probes. $\dagger$~denotes our model.}
+\label{tab:gue}
+\footnotesize
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Task} & \textbf{Caduceus} & \textbf{DNABERT-2}
+              & \textbf{Mamba}$^\dagger$ & \textbf{HFM}$^\dagger$ & $\bm{\Delta}$ \\
+\midrule
+Prom. (TATA) & 0.981 & 0.974 & 0.8274 & \textbf{0.8666} & +0.039 \\
+Prom. (no-TATA) & 0.953 & 0.946 & 0.8889 & \textbf{0.8919} & +0.003 \\
+Splice (bin.) & --- & --- & 0.6878 & \textbf{0.7459} & +0.058 \\
+H3K4me3 & 0.771 & 0.756 & \textbf{0.6466} & 0.6330 & -0.014 \\
+\midrule
+Avg & --- & --- & 0.7627 & \textbf{0.7843} & +0.022 \\
+\bottomrule
+\end{tabular}
+\end{table}

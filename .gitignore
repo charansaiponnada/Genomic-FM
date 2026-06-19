@@ -10,6 +10,8 @@ __pycache__/
 # Data and Checkpoints
 data/
 checkpoints_phase2/
+checkpoints_p3_hfm/
+checkpoints_p3_mamba/
 
 # Stray files
 =1.2.0
