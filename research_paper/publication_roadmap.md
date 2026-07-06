@@ -95,3 +95,38 @@
 4. Only one downstream task (synthetic ceiling)
 5. No comparison against existing published benchmarks
 6. Paper has a `P=1024` vs `P=512` discrepancy
+
+---
+
+# v2 — Mnemosyne execution plan (`src/`)
+
+The rewrite addresses gaps 3–6 by construction and reframes the contribution as
+**mechanism + rigorous analysis**, not a scale record (gaps 1–2 are honestly
+declared as limitations, not hidden).
+
+### Done (this repo, CPU-verified)
+- [x] Unified associative memory: persistent slots (universal motifs) + register
+      slots (per-sequence long-range recall), single Hopfield read, $O(L)$.
+- [x] Reverse-complement equivariance — **proven & unit-tested to 0.0 error**.
+- [x] Semiseparable-plus-low-rank theorem (linear-time justification).
+- [x] MQAR long-range harness, controlled MAE trainer, fair GUE probe, ablations.
+- [x] Honest results pipeline: paper numbers auto-generated from `results/*.json`;
+      missing numbers render as red TODOs (no hand-typed results possible).
+- [x] `tests/test_core.py` green; `modal_app.py` + `REMOTE_GPU.md` for free GPU.
+
+### To run on the free GPU (produces the paper's numbers), in order
+1. [ ] `modal run modal_app.py::longrange` — MQAR accuracy vs length. **The
+       headline, falsifiable result.** Expect: SSM decays with length, Mnemosyne
+       flat. If it doesn't separate, the idea needs rework — that's the point.
+2. [ ] `modal run modal_app.py::ablations` — $P_r$, $P_p$, $\beta$, gate sweeps.
+3. [ ] `modal run modal_app.py::pretrain` — controlled MAE; confirm memory is
+       active (gate > 0, Hopfield energy drops), and report loss for **both**.
+4. [ ] `modal run modal_app.py::gue` — frozen probes, MCC, both models.
+5. [ ] `python src/make_report.py && cd research_paper && latexmk mnemosyne.tex`.
+
+### Then scale (the real test of the mechanism)
+- [ ] Full human genome (3.2 Gbp) → multi-species (NT/Caduceus corpus).
+- [ ] Model 27M → 100M → 350M; check the memory's benefit grows with scale.
+- [ ] Full GUE (28 tasks) + NT benchmarks + Genomic Benchmarks; compare vs
+      **current** frontier (Evo 2, Caduceus, NT-v2, AlphaGenome for regulatory).
+- [ ] 3–5 seeds + confidence intervals on every headline number.

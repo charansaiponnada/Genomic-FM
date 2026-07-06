@@ -1,0 +1,13 @@
+# GPU box (adds the fused Mamba kernel + data/eval stack)
+torch>=2.2
+numpy>=1.24
+# fused selective-scan kernel (optional but ~10-50x faster than the CPU reference);
+# needs a CUDA toolchain. Comment out if the wheel won't build on your box --
+# the model falls back to the pure-PyTorch scan automatically.
+mamba-ssm>=2.2.2
+causal-conv1d>=1.4.0
+# data + downstream eval
+datasets>=2.18
+scikit-learn>=1.3
+matplotlib>=3.7
+tqdm>=4.66

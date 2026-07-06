@@ -1,53 +1,70 @@
-# HopField-Mamba: A Genomic Foundation Model with Associative Memory
+# Mnemosyne — a genomic foundation model with a unified associative memory
 
 **Author:** Charan Sai Ponnada
 
-A research synthesis and implementation project integrating **Modern Hopfield Networks**
-with **Mamba State Space Models** for multi-species genomic sequence modeling. The core
-insight: Hopfield energy dynamics can guide the selection mechanism of SSMs, providing
-exponentially large effective memory at $\mathcal{O}(N)$ inference cost.
+A linear-time genomic sequence model that augments a selective state-space (Mamba)
+backbone with a **unified associative memory**, read by every position through a
+single Modern-Hopfield step. The memory holds two kinds of slots:
 
-## Project Structure
+- **persistent slots** — learned parameters forming a differentiable dictionary of
+  *universal* motifs, and
+- **register slots** — soft summaries gathered from the current sequence that give
+  **per-sequence, distance-independent long-range recall**.
 
-| Path | Description |
-|------|-------------|
-| [`GenomicFM_Phase1_Prototype.ipynb`](./GenomicFM_Phase1_Prototype.ipynb) | Phase 1: Transformer MAE prototype on Human Chr22 (T4 Colab) |
-| [`GenomicFM_Phase2_L40S.ipynb`](./GenomicFM_Phase2_L40S.ipynb) | Phase 2: Mamba-based MAE (single GPU prototype) |
-| [`docs/HopfieldMamba_Synthesis.tex`](./docs/HopfieldMamba_Synthesis.tex) | **Research synthesis paper** — Hopfield–Mamba hybrid architecture |
-| [`docs/HopfieldMamba_Synthesis.pdf`](./docs/HopfieldMamba_Synthesis.pdf) | Compiled synthesis document (10 pages) |
-| [`docs/GenomicFM_Phase2.tex`](./docs/GenomicFM_Phase2.tex) | Phase 2 LaTeX report |
-| [`docs/GenomicFM_Phase2.pdf`](./docs/GenomicFM_Phase2.pdf) | Compiled Phase 2 report |
+The effective token-mixing operator is *semiseparable-plus-low-rank*, so the layer
+stays strictly `O(L)`; the model is exactly **reverse-complement equivariant**
+(proved, and unit-tested to floating-point zero).
 
-## Research Summary
+> This is the **v2 rewrite**. The original HopField-Mamba (v1) work is preserved in
+> [`archive/`](archive/README.md). Why v2 supersedes it: [`docs/ASSESSMENT.md`](docs/ASSESSMENT.md).
 
-### Motivation
-Genomic sequences demand three properties no architecture simultaneously provides:
-- **$\mathcal{O}(N)$ inference** for million-base-pair contexts
-- **Exponential memory capacity** for rare motifs and distal regulatory elements
-- **Cross-species generalization** via shared motif vocabularies
+![architecture](research_paper/figures/mnemosyne_architecture.png)
 
-### The Untapped Duality
+## Quickstart (laptop / CPU — no GPU needed)
 
-The State Space Duality (SSD) framework (Dao & Gu, 2024) proved Attention $\equiv$ SSMs.
-Modern Hopfield Networks (Ramsauer et al., 2021) proved Hopfield $\equiv$ Attention.
-By transitivity: **Hopfield $\equiv$ SSM** — yet no architecture exploits this connection.
+```bash
+pip install -r requirements.txt
+python tests/test_core.py        # verify the architecture (shapes, RC-equivariance, grads)
+```
 
-### Proposed Architecture
+## Run the experiments on a free GPU (from VS Code, no Colab)
 
-HopField-Mamba augments the Mamba recurrence with:
-1. **Hopfield Read:** Content-addressable retrieval from a learned pattern memory
-2. **Augmented SSM Step:** $\bm{h}_t = \bar{\bm{A}}_t \bm{h}_{t-1} + \bar{\bm{B}}_t \bm{x}_t + \sigma(\cdot) \odot \bm{h}_t^{\text{mem}}$
-3. **Hopfield Write:** Memory update via learned gated Hebbian rule
+See [`REMOTE_GPU.md`](REMOTE_GPU.md). Recommended path (Modal, free monthly credit):
 
-### Key Claims
-- **First explicit Hopfield–SSM hybrid** grounded in energy-based dynamics
-- Effective memory $C_{\text{eff}} = \Theta(\min(P, \exp(d/2)))$ vs. $C_{\text{ssm}} = \Theta(d_{\text{state}})$
-- Only $\sim 2.5\times$ per-token cost over standard Mamba
+```bash
+pip install modal && modal setup
+modal run modal_app.py::longrange     # headline: MQAR recall vs distance (memory vs SSM)
+modal run modal_app.py::ablations     # sweep P_r, P_p, beta, gate
+modal run modal_app.py::pretrain      # controlled MAE (ssm vs mnemosyne) + memory diagnostics
+modal run modal_app.py::gue           # frozen-probe downstream (fair protocol)
+modal run modal_app.py::pull          # copy results/ back to your laptop
+python src/make_report.py             # fold real numbers into the paper
+```
 
-## References
+## Repository layout
 
-- Ramsauer et al. 2021 — *Hopfield Networks is All You Need* (ICLR)
-- Gu & Dao 2023 — *Mamba: Linear-Time Sequence Modeling with Selective State Spaces*
-- Dao & Gu 2024 — *Transformers are SSMs* (ICML, SSD framework)
-- Schiff et al. 2024 — *Caduceus* (ICML, Mamba-based genomic FM)
-- He et al. 2022 — *Masked Autoencoders Are Scalable Vision Learners* (CVPR)
+| Path | Contents |
+|------|----------|
+| [`src/mnemosyne/`](src/mnemosyne/) | the model: `ssm`, `memory`, `block`, `model`, `rcps`, `config` |
+| [`src/data/`](src/data/) | tokenizer, genome windowing, MQAR generator |
+| `src/train_mae.py`, `src/eval_longrange.py`, `src/eval_gue.py`, `src/ablate.py` | experiments |
+| `src/make_report.py` | turns `results/*.json` → LaTeX (no hand-typed numbers) |
+| [`tests/`](tests/) | CPU correctness tests (all green) |
+| [`research_paper/mnemosyne.tex`](research_paper/mnemosyne.tex) | the paper (theory + honest results wiring) |
+| [`docs/`](docs/) | [`ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`ASSESSMENT.md`](docs/ASSESSMENT.md) |
+| [`deck/`](deck/) | research presentation (`.pptx`) |
+| `modal_app.py`, `REMOTE_GPU.md` | free remote-GPU execution |
+| [`archive/`](archive/README.md) | v1 (HopField-Mamba) notebooks, paper, docs |
+
+## Research values
+
+Every number in the paper is generated from real run logs by `src/make_report.py`;
+unfilled cells render as a visible red TODO, so a fabricated result cannot slip in.
+Negative results are reported, not hidden. See [`docs/ASSESSMENT.md`](docs/ASSESSMENT.md)
+for an honest account of what is verified, what is pending, and how this might fail.
+
+## Key references
+Gu & Dao 2023 (Mamba) · Dao & Gu 2024 (SSD / Mamba-2) · Ramsauer et al. 2021
+(Modern Hopfield) · Arora et al. 2023 (Zoology / MQAR) · Schiff et al. 2024
+(Caduceus) · Nguyen et al. 2024 (Evo) · Brixi et al. 2025 (Evo 2) · Avsec et al.
+2025 (AlphaGenome). Full list in the paper and the deck.

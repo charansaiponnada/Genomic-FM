@@ -13,6 +13,14 @@ checkpoints_phase2/
 checkpoints_p3_hfm/
 checkpoints_p3_mamba/
 
+# v2 run artifacts (regenerated from code)
+results/
+research_paper/generated_results.tex
+.modal/
+
+# deck render artifacts (QA only; pptx + pdf are the deliverables)
+deck/slide-*.jpg
+
 # Stray files
 =1.2.0
 
