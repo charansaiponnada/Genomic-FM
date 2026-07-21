@@ -8,7 +8,7 @@ __pycache__/
 */.ipynb_checkpoints/*
 
 # Data and Checkpoints
-data/
+/data/
 checkpoints_phase2/
 checkpoints_p3_hfm/
 checkpoints_p3_mamba/

@@ -20,7 +20,7 @@ import torch.nn as nn
 sys.path.insert(0, os.path.dirname(__file__))
 from mnemosyne.config import MnemosyneConfig
 from mnemosyne.model import MnemosyneMAE, SSMBaseline
-from data import genomes
+from mnemosyne.data import genomes
 
 
 def cosine_lr(step, total, base, warmup):

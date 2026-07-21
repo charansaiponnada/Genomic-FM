@@ -23,7 +23,7 @@ import torch.nn as nn
 sys.path.insert(0, os.path.dirname(__file__))
 from mnemosyne.config import MnemosyneConfig
 from mnemosyne.block import MnemosyneBlock, RMSNorm
-from data.synthetic import make_mqar_batch, mqar_vocab_size, IGNORE
+from mnemosyne.data.synthetic import make_mqar_batch, mqar_vocab_size, IGNORE
 
 
 class RecallModel(nn.Module):

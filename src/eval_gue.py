@@ -22,7 +22,7 @@ import torch
 sys.path.insert(0, os.path.dirname(__file__))
 from mnemosyne.config import MnemosyneConfig
 from mnemosyne.model import MnemosyneMAE, SSMBaseline
-from data.tokenizer import encode_batch
+from mnemosyne.data.tokenizer import encode_batch
 
 # Map: friendly task name -> (hf_dataset, config, seq_column, label_column)
 # These follow the GUE tasks packaged for DNABERT-2 / NT benchmarks; adjust to

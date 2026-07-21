@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from mnemosyne import MnemosyneConfig, MnemosyneMAE, SSMBaseline
 from mnemosyne.rcps import rc_input, rc_logits, COMPLEMENT_PERM
-from data.synthetic import make_mqar_batch, mqar_vocab_size, IGNORE
+from mnemosyne.data.synthetic import make_mqar_batch, mqar_vocab_size, IGNORE
 
 
 def small_cfg(**kw):
